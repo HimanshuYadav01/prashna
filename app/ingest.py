@@ -92,11 +92,38 @@ def append_register(meta: dict):
 
 
 def extract_text(filename: str, raw: bytes) -> str:
-    if filename.lower().endswith(".pdf"):
+    """Supported: .pdf (text layer), .docx, and any plain-text format
+    (.md/.txt/.csv). Binary garbage is rejected rather than silently indexed."""
+    low = filename.lower()
+    if low.endswith(".pdf"):
         from pypdf import PdfReader
         import io
-        return "\n".join(p.extract_text() or "" for p in PdfReader(io.BytesIO(raw)).pages)
-    return raw.decode("utf-8", errors="replace")
+        text = "\n".join(p.extract_text() or ""
+                         for p in PdfReader(io.BytesIO(raw)).pages)
+        if len(text.strip()) < 50:
+            raise ValueError(
+                "PDF has no usable text layer (scanned image?) — OCR it or "
+                "upload a text transcription instead")
+        return text
+    if low.endswith(".docx"):
+        import io
+        from docx import Document
+        try:
+            d = Document(io.BytesIO(raw))
+        except Exception:
+            raise ValueError("File is not a valid .docx document")
+        parts = [p.text for p in d.paragraphs]
+        for table in d.tables:
+            for row in table.rows:
+                parts.append(" | ".join(c.text for c in row.cells))
+        return "\n".join(parts)
+    text = raw.decode("utf-8", errors="replace")
+    junk = sum(1 for ch in text[:2000] if ch == "�")
+    if junk > 60:
+        raise ValueError(
+            f"Unsupported binary format for {filename!r} — upload .pdf, .docx, "
+            ".md, .txt or .csv")
+    return text
 
 
 def ingest_document(filename: str, raw: bytes, meta: dict) -> dict:

@@ -122,7 +122,10 @@ async def post_ingest(file: UploadFile = File(...), metadata: str = Form(...)):
     if missing:
         raise HTTPException(422, f"metadata missing fields: {missing}")
     raw = await file.read()
-    return ingest_document(file.filename, raw, meta)
+    try:
+        return ingest_document(file.filename, raw, meta)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
 
 
 @app.get("/health")
