@@ -75,9 +75,13 @@ def resolve(chunks, as_of_date, programme=None):
     best = min(int(c["meta"].get("authority_level", 5)) for c in kept2) if kept2 else 5
     top = [c for c in kept2 if int(c["meta"].get("authority_level", 5)) == best]
     for ch in kept2:
-        if ch not in top:
+        lvl = int(ch["meta"].get("authority_level", 5))
+        # note the outranking only for low-authority sources (handbooks/FAQs);
+        # levels 1-2 coexisting is normal ordering, not a conflict — and a doc
+        # that superseded something is a winner, never "outranked"
+        if ch not in top and lvl >= 3:
             d.log.append(
-                f"{ch['meta']['doc_id']} (level {ch['meta'].get('authority_level')}) "
+                f"{ch['meta']['doc_id']} (level {lvl}) "
                 f"outranked by level {best} (step 3)")
 
     d.kept = kept2  # keep lower-authority context chunks too; `top` decides facts
