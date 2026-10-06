@@ -1,0 +1,12 @@
+Generate exactly 30 synthetic university students as JSON for a test database.
+Schema per student: student_id (format S11## starting at S1101), full_name
+(realistic Indian names, synthetic only), programme (B.Tech CSE or B.Tech ECE,
+roughly half each), batch_year (2023 or 2024), current_semester (5 for 2023
+batch, 3 for 2024), cgpa (0.00-10.00, realistic spread between 5.0 and 9.5),
+active_backlogs (0-3, mostly 0).
+
+Include these edge cases deliberately:
+- one student with cgpa exactly 6.00 and 0 backlogs
+- one student with exactly 3 active backlogs
+- one student with cgpa 9.5 (topper)
+Never use student ids S9000-S9999 (reserved). Reply with JSON only.

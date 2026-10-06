@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+pydantic>=2
+langgraph
+chromadb
+sentence-transformers
+streamlit
+python-multipart
+httpx
+pypdf
+pytest

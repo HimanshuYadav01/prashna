@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+data/prashna.db
+data/chroma/
+data/ep.html
+data/real_docs/
+.pytest_cache/
+eval/last_run.txt
