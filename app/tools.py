@@ -61,21 +61,6 @@ def get_results(con, student_id, course_code=None):
     return {"ok": True, "data": {"results": rows}, "applied_rules": []}
 
 
-def check_supplementary_eligibility(con, student_id, course_code, as_of_date):
-    res = get_results(con, student_id, course_code)
-    if not res["ok"]:
-        return res
-    rule = db.get_rule(con, "supplementary_allowed_results", as_of_date)
-    allowed = set((rule["value"] if rule else "FAIL,ABSENT").split(","))
-    latest = res["data"]["results"][-1]
-    ok = latest["result"] in allowed
-    rules = [_rule_ref(rule)] if rule else []
-    return {"ok": True, "applied_rules": rules,
-            "data": {"result": "ELIGIBLE" if ok else "NOT_ELIGIBLE",
-                     "course_result": latest["result"],
-                     "allowed_after": sorted(allowed)}}
-
-
 def check_placement_eligibility(con, student_id, as_of_date, overrides=None):
     """overrides e.g. {"CS201": "PASS"} — the what-if mechanism (R6)."""
     prof = get_student_profile(con, student_id)
@@ -115,6 +100,5 @@ TOOLS = {
     "get_attendance": get_attendance,
     "check_exam_eligibility": check_exam_eligibility,
     "get_results": get_results,
-    "check_supplementary_eligibility": check_supplementary_eligibility,
     "check_placement_eligibility": check_placement_eligibility,
 }

@@ -35,8 +35,10 @@ st.markdown(f"""
        margin:4px 0; font-size:.84rem; color:#2a3650; border-radius:0 8px 8px 0;}}
 .conflict {{border-left:3px solid {ORANGE}; background:#fdf6ef; padding:6px 12px;
            margin:4px 0; font-size:.82rem; color:#6b4a2f; border-radius:0 8px 8px 0;}}
-[data-testid="stChatMessage"] {{background:#fafaf8; border:1px solid #ecece7;
+[data-testid="stChatMessage"] {{background:#ffffff; border:1px solid #e7e7e1;
                                 border-radius:12px; padding:10px 14px;}}
+[data-testid="stChatMessage"] p, [data-testid="stChatMessage"] li {{color:#17233B;}}
+.hero p {{color:#c6d0cb !important;}}
 div.stButton > button[kind="primary"] {{background:{ORANGE}; border:none;}}
 [data-testid="stSidebar"] {{border-right: 3px solid {NAVY};}}
 </style>

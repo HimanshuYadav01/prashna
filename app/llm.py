@@ -113,7 +113,8 @@ If the material does NOT actually answer the question asked, reply with exactly:
 NOT_IN_SOURCES
 If the material partially answers it, say what is known and what is not.
 Never compare numbers yourself (above/below/meets): state only comparisons and
-verdicts that appear verbatim in TOOL RESULTS.
+verdicts that appear verbatim in TOOL RESULTS. If TOOL RESULTS contain VERDICT
+lines, every verdict MUST be stated in your answer, with its assumptions.
 
 Question: {q}
 
@@ -136,7 +137,18 @@ def compose(question, chunks, tool_results, applied_rules, force=False) -> tuple
     chunk_txt = "\n---\n".join(
         f"[{c['meta']['doc_id']} §{c['meta'].get('section','?')}] {c['text'][:700]}"
         for c in chunks[:4]) or "(none)"
-    tools_txt = json.dumps(tool_results, ensure_ascii=False) if tool_results else "(none)"
+    verdicts = []
+    for t in (tool_results or []):
+        out = t.get("output", {})
+        if isinstance(out, dict) and out.get("result"):
+            extra = ""
+            if out.get("assumptions"):
+                extra = f" (assumptions: {'; '.join(out['assumptions'])})"
+            if out.get("failing_criteria"):
+                extra += f" (failing: {'; '.join(out['failing_criteria'])})"
+            verdicts.append(f"- {t['tool']} VERDICT: {out['result']}{extra}")
+    tools_txt = ("\n".join(verdicts) + "\n" if verdicts else "") + (
+        json.dumps(tool_results, ensure_ascii=False) if tool_results else "(none)")
     rules_txt = json.dumps(applied_rules, ensure_ascii=False) if applied_rules else "(none)"
     if MOCK:
         parts = []

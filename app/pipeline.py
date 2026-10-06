@@ -158,12 +158,13 @@ def node_tools(s: S) -> S:
         call("check_placement_eligibility", student_id=sid,
              as_of_date=s["as_of_date"], overrides=overrides or None)
         if course:
-            call("check_supplementary_eligibility", student_id=sid,
-                 course_code=course, as_of_date=s["as_of_date"])
+            call("get_results", student_id=sid, course_code=course)
     elif cat == "personal_eligibility":
-        if "supplementary" in ql and course:
-            call("check_supplementary_eligibility", student_id=sid,
-                 course_code=course, as_of_date=s["as_of_date"])
+        # NOTE: NSUT has no supplementary exams (NSUT-REG-BTECH-2019 §12.3);
+        # those questions answer from policy retrieval, no eligibility tool
+        if "supplementary" in ql:
+            if course:
+                call("get_results", student_id=sid, course_code=course)
         elif course:
             call("check_exam_eligibility", student_id=sid, course_code=course,
                  as_of_date=s["as_of_date"])
