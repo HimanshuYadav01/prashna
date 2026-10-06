@@ -50,8 +50,20 @@ def node_authorise(s: S) -> S:
     return s
 
 
+PERSONAL = {"personal_data", "personal_eligibility", "what_if"}
+
+
 def node_classify(s: S) -> S:
     c, stats = llm.classify(s["question"])
+    # deterministic arbitration: when the model and the regex heuristic disagree
+    # on whether the question is personal, the heuristic wins — small models
+    # over-read "do I need" as personal, which causes wrong refusals
+    h = llm._heuristic_classify(s["question"])
+    if (c["question_category"] in PERSONAL) != (h["question_category"] in PERSONAL):
+        c = h
+        stats["mode"] = stats.get("mode", "") + "+heuristic_override"
+    # the flag is always derived from the final category, never trusted raw
+    c["needs_personal_data"] = c["question_category"] in PERSONAL
     s["classification"] = c
     s["audit"]["classification"] = c
     s["audit"]["llm"]["calls"] += stats["llm_calls"]
