@@ -80,11 +80,13 @@ def node_route(s: S) -> S:
     # retrieval still runs, and the ground-check returns not_found only when
     # no evidence survives. Abstention is decided by code, not model opinion.
     if c["needs_personal_data"] and not s.get("student_id"):
-        if c["question_category"] == "what_if":
-            # a hypothetical without identity is answerable from policy alone
+        wants_records = re.search(r"\bmy\b|\bam i\b|\bdo i have\b", s["question"].lower())
+        if c["question_category"] == "what_if" or not wants_records:
+            # a hypothetical, or a generically-phrased question, is answerable
+            # from policy alone without anyone's records
             c["question_category"] = "policy_fact"
             c["needs_personal_data"] = False
-            s["audit"]["steps"].append("route:whatif_downgraded_to_policy")
+            s["audit"]["steps"].append("route:downgraded_to_policy")
         else:
             s.update(answer="Please sign in so I can look at your own records.",
                      answer_type="refused",

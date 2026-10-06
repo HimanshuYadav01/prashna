@@ -51,12 +51,12 @@ def _heuristic_classify(q: str) -> dict:
         cat = "policy_fact"   # consequence-of-rule questions are policy, not personal
     elif re.search(r"\bif i\b|\bwill i\b.*\bif\b|suppose", ql):
         cat = "what_if"
+    elif re.search(r"how do i|how to|procedure|where do i", ql):
+        cat = "procedure"   # procedural phrasing wins even with "my" in it
     elif re.search(r"am i (eligible|allowed|permitted)|can i (sit|appear|register)", ql):
         cat = "personal_eligibility"
     elif re.search(r"\bmy \b|\bdo i have\b|\bwhat is my\b", ql):
         cat = "personal_data"
-    elif re.search(r"how do i|how to|procedure|apply", ql):
-        cat = "procedure"
     elif re.search(r"attendance|exam|fee|placement|supplementary|cgpa|backlog|scholar|hostel|credit|pass mark|marks", ql):
         cat = "policy_fact"
     else:
