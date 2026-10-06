@@ -64,11 +64,9 @@ def node_classify(s: S) -> S:
 def node_route(s: S) -> S:
     c = s["classification"]
     s["audit"]["steps"].append("route")
-    if c["question_category"] == "not_answerable":
-        s.update(answer="This looks outside university academic services. " + NOT_FOUND_MSG,
-                 answer_type="out_of_scope" if False else "not_found",
-                 explanation="Out of scope of the authorised sources.", done=True)
-        return s
+    # NOTE: a model verdict of "not_answerable" is never trusted on its own —
+    # retrieval still runs, and the ground-check returns not_found only when
+    # no evidence survives. Abstention is decided by code, not model opinion.
     if c["needs_personal_data"] and not s.get("student_id"):
         s.update(answer="Please sign in so I can look at your own records.",
                  answer_type="refused",
@@ -164,13 +162,25 @@ def node_tools(s: S) -> S:
     return s
 
 
+STRONG_EVIDENCE = 0.55  # above this, a NOT_IN_SOURCES verdict triggers one forced retry
+
+
 def node_compose(s: S) -> S:
     s["audit"]["steps"].append("compose")
-    answer, stats = llm.compose(s["question"], s.get("kept", []),
+    kept = s.get("kept", [])
+    answer, stats = llm.compose(s["question"], kept,
                                 s.get("tool_results", []), s.get("applied_rules", []))
-    s["answer"] = answer
     s["audit"]["llm"]["calls"] += stats["llm_calls"]
     s["audit"]["llm"]["tokens"] += stats["tokens"]
+    top = max((c["score"] for c in kept), default=0.0)
+    if "NOT_IN_SOURCES" in answer and (top >= STRONG_EVIDENCE or s.get("tool_results")):
+        # strong evidence contradicts the abstention verdict: one forced retry
+        answer, stats = llm.compose(s["question"], kept, s.get("tool_results", []),
+                                    s.get("applied_rules", []), force=True)
+        s["audit"]["llm"]["calls"] += stats["llm_calls"]
+        s["audit"]["llm"]["tokens"] += stats["tokens"]
+        s["audit"]["steps"].append("compose_forced_retry")
+    s["answer"] = answer
     return s
 
 
@@ -180,6 +190,12 @@ def node_groundcheck(s: S) -> S:
     if not kept and not tools_used:
         s.update(answer=NOT_FOUND_MSG, answer_type="not_found",
                  explanation="No authorised source or record covers this.")
+        return s
+    if "NOT_IN_SOURCES" in s.get("answer", ""):
+        # composer judged the retrieved material off-target; code confirms by
+        # replacing with the mandated abstention (R3)
+        s.update(answer=NOT_FOUND_MSG, answer_type="not_found", kept=[],
+                 explanation="Retrieved material did not answer the question.")
         return s
     if tools_used:
         s["answer_type"] = "calculated"

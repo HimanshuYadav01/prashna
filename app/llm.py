@@ -67,7 +67,7 @@ def _heuristic_classify(q: str) -> dict:
 
 
 def _ollama_chat(prompt, schema=None, num_predict=400):
-    body = {"model": MODEL, "stream": False,
+    body = {"model": MODEL, "stream": False, "keep_alive": "60m",
             "options": {"temperature": 0, "num_predict": num_predict},
             "messages": [{"role": "user", "content": prompt}]}
     if schema:
@@ -107,7 +107,9 @@ def classify(question: str) -> tuple[dict, dict]:
 COMPOSE_PROMPT = """You are Prashna, a university assistant. Write a short, plain answer
 to the student's question using ONLY the material below. Do not add any fact that is
 not in the material. Do not invent citations; they are attached separately.
-If the material is insufficient, say what is known and what is not.
+If the material does NOT actually answer the question asked, reply with exactly:
+NOT_IN_SOURCES
+If the material partially answers it, say what is known and what is not.
 
 Question: {q}
 
@@ -121,7 +123,11 @@ Question: {q}
 Answer in 2-4 sentences."""
 
 
-def compose(question, chunks, tool_results, applied_rules) -> tuple[str, dict]:
+FORCE_NOTE = ("\nThe material IS relevant to this question. Answer from it; do not "
+              "reply NOT_IN_SOURCES.\n")
+
+
+def compose(question, chunks, tool_results, applied_rules, force=False) -> tuple[str, dict]:
     stats = {"llm_calls": 0, "tokens": 0}
     chunk_txt = "\n---\n".join(
         f"[{c['meta']['doc_id']} §{c['meta'].get('section','?')}] {c['text'][:700]}"
@@ -138,9 +144,11 @@ def compose(question, chunks, tool_results, applied_rules) -> tuple[str, dict]:
                          f"{chunks[0]['text'][:300]}")
         return (" ".join(parts) or "No supporting material."), stats
     try:
-        content, toks = _ollama_chat(COMPOSE_PROMPT.format(
-            q=question, chunks=chunk_txt, tools=tools_txt, rules=rules_txt),
-            num_predict=300)
+        prompt = COMPOSE_PROMPT.format(
+            q=question, chunks=chunk_txt, tools=tools_txt, rules=rules_txt)
+        if force:
+            prompt += FORCE_NOTE
+        content, toks = _ollama_chat(prompt, num_predict=300)
         stats["llm_calls"], stats["tokens"] = 1, toks
         return content.strip(), stats
     except Exception:
