@@ -73,6 +73,47 @@ def post_ask(req: AskRequest, x_student_id: Optional[str] = Header(default=None)
     return ask(req.question, x_student_id, req.as_of_date)
 
 
+class ResetRequest(BaseModel):
+    student_id: str
+
+
+class ResetConfirm(BaseModel):
+    student_id: str
+    code: str
+    new_password: str
+
+
+@app.post("/auth/reset_request")
+def reset_request(req: ResetRequest):
+    """Issues a one-time 15-minute reset code. The response is identical whether
+    or not the student exists (no account enumeration). In production the code
+    would be emailed; in this demo the admin panel is the delivery channel."""
+    db.create_reset(db.connect(), req.student_id.strip())
+    return {"ok": True, "message": "If the ID exists, a reset code has been issued. "
+            "Collect it from the Academic Section (admin panel in this demo)."}
+
+
+@app.post("/auth/reset_confirm")
+def reset_confirm(req: ResetConfirm):
+    con = db.connect()
+    if len(req.new_password) < 6:
+        raise HTTPException(422, "Password must be at least 6 characters")
+    if not db.consume_reset(con, req.student_id.strip(), req.code):
+        raise HTTPException(401, "Invalid or expired reset code")
+    db.set_password(con, req.student_id.strip(), req.new_password)
+    return {"ok": True, "message": "Password updated. You can sign in now."}
+
+
+@app.get("/admin/reset_requests")
+def reset_requests(x_admin_pin: Optional[str] = Header(default=None)):
+    import os as _os
+    if x_admin_pin != _os.environ.get("ADMIN_PIN", "prashna"):
+        raise HTTPException(401, "Admin PIN required")
+    rows = db.connect().execute(
+        "SELECT student_id, code, expires_at FROM password_resets").fetchall()
+    return [dict(r) for r in rows]
+
+
 @app.post("/ingest")
 async def post_ingest(file: UploadFile = File(...), metadata: str = Form(...)):
     meta = json.loads(metadata)

@@ -66,6 +66,11 @@ CREATE TABLE IF NOT EXISTS credentials (
   salt TEXT NOT NULL,
   algo TEXT NOT NULL DEFAULT 'pbkdf2_sha256_100k'
 );
+CREATE TABLE IF NOT EXISTS password_resets (
+  student_id TEXT PRIMARY KEY REFERENCES students(student_id),
+  code TEXT NOT NULL,            -- one-time 6-digit code, 15-min expiry
+  expires_at TEXT NOT NULL
+);
 """
 
 
@@ -201,6 +206,39 @@ def verify_password(con, student_id: str, password: str) -> bool:
         return False
     return hmac.compare_digest(
         row["pw_hash"], _hash_pw(password, bytes.fromhex(row["salt"])))
+
+
+def create_reset(con, student_id: str) -> str | None:
+    """Issue a one-time 6-digit reset code valid 15 minutes. Returns None for
+    unknown students (caller responds identically either way)."""
+    import datetime
+    import secrets
+    row = con.execute("SELECT 1 FROM students WHERE student_id=?",
+                      (student_id,)).fetchone()
+    if not row:
+        return None
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    expires = (datetime.datetime.utcnow()
+               + datetime.timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    con.execute("INSERT OR REPLACE INTO password_resets VALUES (?,?,?)",
+                (student_id, code, expires))
+    con.commit()
+    return code
+
+
+def consume_reset(con, student_id: str, code: str) -> bool:
+    """Validate and consume a reset code (one-time, expiry-checked)."""
+    import datetime
+    row = con.execute("SELECT code, expires_at FROM password_resets "
+                      "WHERE student_id=?", (student_id,)).fetchone()
+    if not row:
+        return False
+    now = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    ok = hmac.compare_digest(row["code"], code.strip()) and now <= row["expires_at"]
+    if ok:
+        con.execute("DELETE FROM password_resets WHERE student_id=?", (student_id,))
+        con.commit()
+    return ok
 
 
 def seed_credentials(con):

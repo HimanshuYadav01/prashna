@@ -88,6 +88,31 @@ with st.sidebar:
                     st.error(f"API error: {e}")
             st.caption("Passwords are verified against salted PBKDF2 hashes — "
                        "never stored in plaintext.")
+            with st.expander("Forgot password?"):
+                r_sid = st.text_input("Your Student ID", key="rst_sid",
+                                      placeholder="S1007")
+                if st.button("Request reset code"):
+                    try:
+                        rr = httpx.post(f"{API}/auth/reset_request", timeout=10,
+                                        json={"student_id": r_sid.strip()})
+                        st.info(rr.json().get("message", rr.text))
+                    except Exception as e:
+                        st.error(str(e))
+                r_code = st.text_input("Reset code", key="rst_code",
+                                       placeholder="6-digit code from admin")
+                r_pw = st.text_input("New password", type="password", key="rst_pw")
+                if st.button("Set new password"):
+                    try:
+                        rc = httpx.post(f"{API}/auth/reset_confirm", timeout=10,
+                                        json={"student_id": r_sid.strip(),
+                                              "code": r_code.strip(),
+                                              "new_password": r_pw})
+                        if rc.status_code == 200:
+                            st.success("Password updated — sign in above.")
+                        else:
+                            st.error(rc.json().get("detail", rc.text))
+                    except Exception as e:
+                        st.error(str(e))
         else:
             sdata = st.session_state.student
             who = sdata["student_id"]
@@ -228,6 +253,22 @@ else:
         st.dataframe(get_sources(), use_container_width=True, height=300)
     except Exception as e:
         st.caption(str(e))
+
+    st.divider()
+    st.subheader("Password reset requests")
+    st.caption("Stands in for the email channel: hand the code to the student "
+               "after identity verification. Codes are one-time, 15-minute.")
+    if st.button("Refresh requests"):
+        try:
+            rr = httpx.get(f"{API}/admin/reset_requests", timeout=10,
+                           headers={"X-Admin-Pin": ADMIN_PIN})
+            data = rr.json()
+            if data:
+                st.dataframe(data, use_container_width=True)
+            else:
+                st.caption("No pending reset requests.")
+        except Exception as e:
+            st.error(str(e))
 
     st.divider()
     st.subheader("Audit lookup")
