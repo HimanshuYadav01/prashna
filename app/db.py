@@ -187,25 +187,30 @@ import hmac
 import os as _os
 
 
-def _hash_pw(password: str, salt: bytes) -> str:
-    return hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100_000).hex()
+PW_ALGO = "pbkdf2_sha512_100k"
+
+
+def _hash_pw(password: str, salt: bytes, algo: str = PW_ALGO) -> str:
+    digest = "sha512" if "sha512" in algo else "sha256"
+    return hashlib.pbkdf2_hmac(digest, password.encode(), salt, 100_000).hex()
 
 
 def set_password(con, student_id: str, password: str):
     salt = _os.urandom(16)
     con.execute("INSERT OR REPLACE INTO credentials VALUES (?,?,?,?)",
-                (student_id, _hash_pw(password, salt), salt.hex(),
-                 "pbkdf2_sha256_100k"))
+                (student_id, _hash_pw(password, salt), salt.hex(), PW_ALGO))
     con.commit()
 
 
 def verify_password(con, student_id: str, password: str) -> bool:
-    row = con.execute("SELECT pw_hash, salt FROM credentials WHERE student_id=?",
-                      (student_id,)).fetchone()
+    row = con.execute(
+        "SELECT pw_hash, salt, algo FROM credentials WHERE student_id=?",
+        (student_id,)).fetchone()
     if not row:
         return False
     return hmac.compare_digest(
-        row["pw_hash"], _hash_pw(password, bytes.fromhex(row["salt"])))
+        row["pw_hash"],
+        _hash_pw(password, bytes.fromhex(row["salt"]), row["algo"]))
 
 
 def create_reset(con, student_id: str) -> str | None:
@@ -243,7 +248,10 @@ def consume_reset(con, student_id: str, code: str) -> bool:
 
 def seed_credentials(con):
     """Every student without credentials gets the documented demo default
-    password 'nsut@<student_id>' — stored only as a salted PBKDF2 hash."""
+    password 'nsut@<student_id>' — stored only as a salted PBKDF2-SHA512 hash.
+    Rows hashed under an older algorithm are reset to the default (a hash
+    cannot be upgraded without the plaintext)."""
+    con.execute("DELETE FROM credentials WHERE algo != ?", (PW_ALGO,))
     missing = con.execute(
         """SELECT s.student_id FROM students s
            LEFT JOIN credentials c ON c.student_id = s.student_id
