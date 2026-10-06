@@ -60,6 +60,12 @@ CREATE TABLE IF NOT EXISTS audit_records (
   ts TEXT NOT NULL,
   record TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS credentials (
+  student_id TEXT PRIMARY KEY REFERENCES students(student_id),
+  pw_hash TEXT NOT NULL,
+  salt TEXT NOT NULL,
+  algo TEXT NOT NULL DEFAULT 'pbkdf2_sha256_100k'
+);
 """
 
 
@@ -169,6 +175,44 @@ def seed(con):
     con.executemany(
         "INSERT INTO rule_registry VALUES (?,?,?,?,?,?,?,?,?,?,?)", RULES)
     con.commit()
+
+
+import hashlib
+import hmac
+import os as _os
+
+
+def _hash_pw(password: str, salt: bytes) -> str:
+    return hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100_000).hex()
+
+
+def set_password(con, student_id: str, password: str):
+    salt = _os.urandom(16)
+    con.execute("INSERT OR REPLACE INTO credentials VALUES (?,?,?,?)",
+                (student_id, _hash_pw(password, salt), salt.hex(),
+                 "pbkdf2_sha256_100k"))
+    con.commit()
+
+
+def verify_password(con, student_id: str, password: str) -> bool:
+    row = con.execute("SELECT pw_hash, salt FROM credentials WHERE student_id=?",
+                      (student_id,)).fetchone()
+    if not row:
+        return False
+    return hmac.compare_digest(
+        row["pw_hash"], _hash_pw(password, bytes.fromhex(row["salt"])))
+
+
+def seed_credentials(con):
+    """Every student without credentials gets the documented demo default
+    password 'nsut@<student_id>' — stored only as a salted PBKDF2 hash."""
+    missing = con.execute(
+        """SELECT s.student_id FROM students s
+           LEFT JOIN credentials c ON c.student_id = s.student_id
+           WHERE c.student_id IS NULL""").fetchall()
+    for r in missing:
+        set_password(con, r["student_id"], f"nsut@{r['student_id']}")
+    return len(missing)
 
 
 def get_rule(con, parameter, as_of_date, programme="ALL", batch=None):

@@ -18,7 +18,28 @@ app = FastAPI(title="Prashna", description="AI University Student Services Assis
 def _startup():
     con = db.connect()
     db.seed(con)
+    db.seed_credentials(con)
     load_corpus()
+
+
+class LoginRequest(BaseModel):
+    student_id: str
+    password: str
+
+
+@app.post("/auth/login")
+def login(req: LoginRequest):
+    """UI-layer authentication. Passwords are stored only as salted PBKDF2-SHA256
+    hashes in SQLite (credentials table) — never plaintext. Note: the /ask
+    identity contract remains the X-Student-Id header per the brief (Section 6);
+    this endpoint gates the student UI, it does not replace the API contract."""
+    con = db.connect()
+    if not db.verify_password(con, req.student_id.strip(), req.password):
+        raise HTTPException(401, "Invalid student ID or password")
+    row = con.execute("SELECT student_id, full_name, programme FROM students "
+                      "WHERE student_id=?", (req.student_id.strip(),)).fetchone()
+    return {"ok": True, "student_id": row["student_id"],
+            "full_name": row["full_name"], "programme": row["programme"]}
 
 
 class AskRequest(BaseModel):
@@ -123,4 +144,6 @@ async def load_students(file: UploadFile = File(...)):
         except Exception as e:
             report.append(f"row {i + 2}: {e}")
     con.commit()
-    return {"inserted": inserted, "violations": report, "status": "ok" if not report else "partial"}
+    created = db.seed_credentials(con)  # judge-loaded students get hashed default creds too
+    return {"inserted": inserted, "credentials_created": created,
+            "violations": report, "status": "ok" if not report else "partial"}

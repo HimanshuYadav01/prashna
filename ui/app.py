@@ -70,10 +70,36 @@ with st.sidebar:
                    "scholarships. Personal questions need a student login.")
         as_of = st.text_input("as_of_date", "", placeholder="YYYY-MM-DD · blank = today")
     elif role == "Student":
-        students = [f"S10{i:02d}" for i in range(1, 33)]
-        who = st.selectbox("Student ID", students)
-        as_of = st.text_input("as_of_date", "", placeholder="YYYY-MM-DD · blank = today")
-        st.caption("Identity is sent only as the X-Student-Id header.")
+        if not st.session_state.get("student"):
+            sid_in = st.text_input("Student ID", placeholder="S1007")
+            pw_in = st.text_input("Password", type="password",
+                                  placeholder="demo: nsut@<your ID>")
+            if st.button("Sign in", type="primary"):
+                try:
+                    r = httpx.post(f"{API}/auth/login", timeout=10,
+                                   json={"student_id": sid_in.strip(),
+                                         "password": pw_in})
+                    if r.status_code == 200:
+                        st.session_state.student = r.json()
+                        st.rerun()
+                    else:
+                        st.error("Invalid student ID or password")
+                except Exception as e:
+                    st.error(f"API error: {e}")
+            st.caption("Passwords are verified against salted PBKDF2 hashes — "
+                       "never stored in plaintext.")
+        else:
+            sdata = st.session_state.student
+            who = sdata["student_id"]
+            st.success(f"{sdata['full_name']} · {who}")
+            st.caption(sdata["programme"])
+            if st.button("Sign out"):
+                st.session_state.student = None
+                st.rerun()
+            as_of = st.text_input("as_of_date", "",
+                                  placeholder="YYYY-MM-DD · blank = today")
+            st.caption("Your identity travels only as the X-Student-Id header; "
+                       "you can only query your own records.")
     else:
         if not st.session_state.get("admin_ok"):
             pin = st.text_input("Admin PIN", type="password")
@@ -96,12 +122,16 @@ with st.sidebar:
 
 # ---------- hero header ----------
 subtitle = {"Guest": "Ask about rules, fees, procedures and notices — no login needed.",
-            "Student": f"Signed in as {who} — personal answers come from your records.",
+            "Student": (f"Signed in as {who} — personal answers come from your records."
+                        if who else "Sign in from the sidebar to ask about your own records."),
             "Admin": "Manage documents and inspect audit records."}[role]
 st.markdown(f"""<div class="hero"><span class="role">{role}</span>
 <h1>Prashna</h1><p>{subtitle}</p></div>""", unsafe_allow_html=True)
 
 # ---------- GUEST + STUDENT: chat ----------
+if role == "Student" and not who:
+    st.info("Please sign in from the sidebar. You can still ask general questions as a Guest.")
+    st.stop()
 if role in ("Guest", "Student"):
     hist_key = f"history_{role}_{who or 'guest'}"
     if hist_key not in st.session_state:
