@@ -80,11 +80,17 @@ def node_route(s: S) -> S:
     # retrieval still runs, and the ground-check returns not_found only when
     # no evidence survives. Abstention is decided by code, not model opinion.
     if c["needs_personal_data"] and not s.get("student_id"):
-        s.update(answer="Please sign in so I can look at your own records.",
-                 answer_type="refused",
-                 explanation="Personal question without identity (X-Student-Id).",
-                 done=True)
-        return s
+        if c["question_category"] == "what_if":
+            # a hypothetical without identity is answerable from policy alone
+            c["question_category"] = "policy_fact"
+            c["needs_personal_data"] = False
+            s["audit"]["steps"].append("route:whatif_downgraded_to_policy")
+        else:
+            s.update(answer="Please sign in so I can look at your own records.",
+                     answer_type="refused",
+                     explanation="Personal question without identity (X-Student-Id).",
+                     done=True)
+            return s
     if c["question_category"] in ("personal_data", "personal_eligibility", "what_if") \
             and not c.get("course_code") \
             and any(w in s["question"].lower() for w in ("attendance", "eligible for the", "exam in", "supplementary")) \

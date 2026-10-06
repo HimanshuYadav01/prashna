@@ -47,7 +47,9 @@ def _heuristic_classify(q: str) -> dict:
     ql = q.lower()
     course = (re.search(r"\b([A-Z]{2}\d{3})\b", q.upper()) or [None, None])[1]
     sid = (re.search(r"\b(S\d{4})\b", q.upper()) or [None, None])[1]
-    if re.search(r"\bif i\b|\bwill i\b.*\bif\b|suppose", ql):
+    if re.search(r"what happens|what is the (fine|penalty|consequence)", ql):
+        cat = "policy_fact"   # consequence-of-rule questions are policy, not personal
+    elif re.search(r"\bif i\b|\bwill i\b.*\bif\b|suppose", ql):
         cat = "what_if"
     elif re.search(r"am i (eligible|allowed|permitted)|can i (sit|appear|register)", ql):
         cat = "personal_eligibility"
@@ -110,6 +112,8 @@ not in the material. Do not invent citations; they are attached separately.
 If the material does NOT actually answer the question asked, reply with exactly:
 NOT_IN_SOURCES
 If the material partially answers it, say what is known and what is not.
+Never compare numbers yourself (above/below/meets): state only comparisons and
+verdicts that appear verbatim in TOOL RESULTS.
 
 Question: {q}
 
